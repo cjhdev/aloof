@@ -96,7 +96,7 @@ bool aloof_slip_encode(struct aloof_slip *self, const void *in, uint32_t size)
 
 bool aloof_slip_encode_end(struct aloof_slip *self)
 {
-    while(!self->put(self->state, ALOOF_SLIP_END_CHAR));
+    while(!self->put_fn(self->state, ALOOF_SLIP_END_CHAR));
     
     return true;
 }

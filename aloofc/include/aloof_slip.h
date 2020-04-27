@@ -29,7 +29,7 @@ struct aloof_slip_init_arg {
     
     void *state;
     
-    frame_put_fn put_fn;    
+    aloof_slip_put_fn put_fn;    
 };
 
 struct aloof_slip *aloof_slip_init(struct aloof_slip *self, const struct aloof_slip_init_arg *arg);
