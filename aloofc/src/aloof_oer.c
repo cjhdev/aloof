@@ -289,16 +289,16 @@ uint8_t aloof_oer_sizeofUint(uint32_t value)
 {
     uint8_t retval;
 
-    if(value <= 0x7fUL){
+    if(value < 0x80UL){
         retval = 1U;
     }
-    else if(value <= 0x3fffUL){
+    else if(value < 0x100UL){
         retval = 2U;            
     }
-    else if(value <= 0xffffUL){
+    else if(value <= 0x10000UL){
         retval = 3U;
     }
-    else if(value <= 0xffffffUL){
+    else if(value <= 0x1000000UL){
         retval = 4U;
     }
     else{        
@@ -317,7 +317,7 @@ uint8_t aloof_oer_sizeofInt(int32_t value)
         if(value >= -64L){
             retval = 1U;
         }
-        else if(value >= -8192L){
+        else if(value >= -128L){
             retval = 2U;
         }
         else if(value >= -32768L){
@@ -335,7 +335,7 @@ uint8_t aloof_oer_sizeofInt(int32_t value)
         if(value <= 0x3fL){
             retval = 1U;
         }
-        else if(value <= 0x1fffL){
+        else if(value <= 0x7fL){
             retval = 2U;            
         }
         else if(value <= 0x7fffL){
@@ -356,26 +356,38 @@ uint8_t aloof_oer_sizeofInt(int32_t value)
 
 static bool encodeVarint(struct aloof_stream *s, bool isSigned, uint32_t in)
 {
-    uint8_t buffer[9U];
+    uint8_t buffer[5U];
     uint8_t bytes = (isSigned) ? aloof_oer_sizeofInt((int32_t)in) : aloof_oer_sizeofUint(in);
-    uint8_t i;
 
     if(bytes == 1U){
 
         *buffer = (uint8_t)(in & 0x7fU);
     }
-    else if(bytes == 2U){
-
-        buffer[0] = 0x80U | ((uint8_t)(in >> 8) & 0x3fU);
-        buffer[1] = (uint8_t)(in);   
-    }
     else{
         
-        buffer[0] = 0xC0U | (bytes-2U);
-        for(i=1U; i < bytes; i++){
-
-            buffer[i] = (uint8_t)(in >> ((bytes-(i+1U))*8U));
-        }            
+        buffer[0] = 0x80U | (bytes-1U);
+        
+        switch(bytes){
+        default:
+        case 2:
+            buffer[1] = in;
+            break;        
+        case 3:
+            buffer[1] = in >> 8;
+            buffer[2] = in;
+            break;
+        case 4: 
+            buffer[1] = in >> 16;
+            buffer[2] = in >> 8;
+            buffer[3] = in;
+            break;
+        case 5:
+            buffer[1] = in >> 24;
+            buffer[2] = in >> 16;
+            buffer[3] = in >> 8;
+            buffer[4] = in;
+            break;
+        }        
     }
     
     return aloof_stream_write(s, buffer, bytes);    
@@ -383,73 +395,39 @@ static bool encodeVarint(struct aloof_stream *s, bool isSigned, uint32_t in)
 
 static bool decodeVarint(struct aloof_stream *s, bool isSigned, uint32_t *out)
 {
-    uint8_t buffer[9U];
+    uint8_t buffer[5U];
     bool retval = false;
     uint8_t bytes;
     uint8_t i;
 
     if(aloof_stream_read(s, buffer, 1U)){
 
-        if(buffer[0] < 0xc0U){
+        bytes = buffer[0] & 0x7fU;
 
-            if(buffer[0] < 0x80U){
+        if(buffer[0] < 0x80U){
+            
+            *out = (isSigned && ((buffer[0] & 0x40U) == 0x40U)) ? 0xffffffc0UL : 0U;            
+            *out |= (uint32_t)buffer[0];
+            retval = true;  
+        }
+        else if(bytes <= 4){
+            
+            if(aloof_stream_read(s, &buffer[1], bytes)){
+                
+                *out = (isSigned && ((buffer[1] & 0x80U) == 0x80U)) ? 0xffffffffUL : 0U;
+                
+                for(i=1U; i <= bytes; i++){
 
-                if(isSigned && ((buffer[0] & 0x40U) == 0x40U)){
-
-                    *out = 0xffffffc0U;                           
+                    *out <<= 8;
+                    *out |= buffer[i];                        
                 }
-                else{
-                    
-                    *out = 0x0U;
-                }
-                *out |= (uint64_t)buffer[0] & 0x7fU;
-                retval = true;  
-            }
-            else{
 
-                if(aloof_stream_read(s, &buffer[1], 1U)){
-
-                    if(isSigned && ((buffer[1] & 0x80U) == 0x80U)){
-
-                        *out = 0xffffff00UL;                               
-                    }
-                    else{
-                        
-                        *out = 0x0UL;
-                    }
-                    *out |= (uint64_t)buffer[0] & 0x3fU;
-                    *out <<= 6U;
-                    *out |= buffer[1];
-                    retval = true;
-                }
+                retval = true;
             }
         }
         else{
-
-            bytes = (buffer[0] & 0x3fU) + 1U;
-
-            if(bytes <= 4U){
-
-                if(aloof_stream_read(s, &buffer[1], bytes)){
-
-                    if(isSigned && ((buffer[1] & 0x80U) == 0x80U)){
-                        
-                        *out = 0xffff00UL;
-                    }
-                    
-                    for(i=1U; i <= bytes; i++){
-
-                        *out <<= 8;
-                        *out |= buffer[i];                        
-                    }
-
-                    retval = true;
-                }
-            }
-            else{
-
-                /* varint too large */
-            }
+            
+            /* varint too large */
         }
     }
 

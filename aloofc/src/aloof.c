@@ -174,10 +174,11 @@ void aloof_server_process(struct aloof_server *self, struct aloof_stream *in, st
                         (void)aloof_oer_putU8(out, ALOOF_MESSAGE_TYPE_RESPONSE);    
                         (void)aloof_oer_putU8(out, invoke_field);
                         (void)aloof_oer_putU8(out, ALOOF_RESPONSE_TYPE_READ);                                                                
+                        
+                        uint32_t offset = aloof_stream_tell(out);
+                        
                         (void)aloof_oer_putU8(out, 0U);
                     
-                        uint32_t offset = aloof_stream_tell(out);
-                                
                         if(self->read == NULL){
                          
                             (void)aloof_oer_putU8(out, 1U);
