@@ -5,6 +5,8 @@
 #include "aloof_oer.h"
 #include "aloof_stream.h"
 
+#include <string.h>
+
 static bool encodeVarint(struct aloof_stream *s, bool isSigned, uint32_t in);
 static bool decodeVarint(struct aloof_stream *s, bool isSigned, uint32_t *out);
 
@@ -90,12 +92,20 @@ bool aloof_oer_putI64(struct aloof_stream *s, int64_t in)
 
 bool aloof_oer_putFloat(struct aloof_stream *s, float in)
 {
-    return aloof_oer_putU32(s, (uint32_t)in); 
+    uint32_t tmp;
+    
+    (void)memcpy(&tmp, &in, sizeof(tmp));
+    
+    return aloof_oer_putU32(s, tmp); 
 }
 
 bool aloof_oer_putDouble(struct aloof_stream *s, double in)
 {
-    return aloof_oer_putU64(s, (uint64_t)in); 
+    uint64_t tmp;
+    
+    (void)memcpy(&tmp, &in, sizeof(tmp));
+    
+    return aloof_oer_putU64(s, tmp); 
 }
 
 bool aloof_oer_putString(struct aloof_stream *s, const void *in, uint32_t len)

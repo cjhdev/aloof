@@ -1,0 +1,12 @@
+require 'aloof'
+
+#File.expand_path(File.join(File.dirname(__FILE__),"lib")).tap {|pwd| $LOAD_PATH.unshift(pwd) unless $LOAD_PATH.include?(pwd)}
+File.expand_path(File.dirname(__FILE__)).tap {|pwd| $LOAD_PATH.unshift(pwd) unless $LOAD_PATH.include?(pwd)}
+
+Dir["sequences/*.rb"].each { |f| require f }
+
+before do |engine|
+end
+
+after do |engine|
+end

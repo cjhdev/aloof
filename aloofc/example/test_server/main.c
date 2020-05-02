@@ -11,6 +11,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <stdlib.h>
 
 enum test_objects {
     
@@ -32,7 +33,14 @@ enum test_objects {
     TEST_DOUBLE,
     
     TEST_STRING,
-    TEST_BLOB
+    TEST_BLOB,
+    
+    TEST_UNKNOWN,
+    TEST_NO_ACCESS,
+    TEST_AUTH,
+    TEST_ARG,
+    TEST_TEMP,
+    TEST_APP
     
 };
 
@@ -74,9 +82,17 @@ int main(int argc, char **argv)
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(portno);
     
-    if(bind(listener, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) != -1){
+    if(bind(listener, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1){
+        
+        LOG("cannot bind to port %d", portno);
+    }
+    else{
     
-        if(listen(listener, 5) != -1){
+        if(listen(listener, 5) == -1){
+        
+            LOG("listen()");
+        }
+        else{
     
             for(;;){
             
@@ -92,47 +108,66 @@ int main(int argc, char **argv)
                 }
             
                 LOG("accepted connection");
-            
-                n = read(client, &header, sizeof(header));
-                
-                if(n == sizeof(header)){
-                
-                    if(n <= sizeof(rx_buffer)){
+         
+                for(;;){
+              
+                    LOG("reading header");
+              
+                    n = read(client, &header, sizeof(header));
+
+                    if(n == -1){
                         
-                        LOG("reading %d bytes", header);
-                
-                        n = read(client, rx_buffer, header);
+                        break;
+                    }
                     
-                        if(n == header){
+                    if(n != sizeof(header)){
                         
-                            aloof_stream_init(&rx, rx_buffer, header);
-                            aloof_stream_init(&tx, tx_buffer, sizeof(tx_buffer));
-                            
-                            LOG("processing input");
-                            
-                            aloof_server_process(&server, &rx, &tx);
-                            
-                            if(aloof_stream_tell(&tx) > 0){
-                                
-                                LOG("writing output");
-                                
-                                header = aloof_stream_tell(&tx);
-                                
-                                write(client, &header, sizeof(header));
-                                write(client, tx_buffer, aloof_stream_tell(&tx));
-                            }
-                            else{
-                                
-                                LOG("no output to write");
-                            }
-                        }
+                        break;
+                    }
+                    
+                    if(header > sizeof(rx_buffer)){
+                        
+                        LOG("message too large for buffer");
+                        break;
+                    }
+                          
+                    LOG("reading %d bytes", header);
+
+                    n = read(client, rx_buffer, header);
+                    
+                    if(n == -1){
+                        
+                        break;
+                    }
+                    
+                    if(n != header){
+                        
+                        break;
+                    }
+                    
+                    aloof_stream_init_ro(&rx, rx_buffer, header);
+                    aloof_stream_init(&tx, tx_buffer, sizeof(tx_buffer));
+                  
+                    LOG("processing input");
+                  
+                    aloof_server_process(&server, &rx, &tx);
+                  
+                    if(aloof_stream_tell(&tx) > 0){
+                      
+                        header = aloof_stream_tell(&tx);
+                        
+                        LOG("writing %d bytes of output", header);
+                      
+                        write(client, &header, sizeof(header));
+                        write(client, tx_buffer, header);
                     }
                     else{
-                        
-                        LOG("header too large for buffer");
-                    }                
+                      
+                        LOG("no output to write");
+                    }                    
                 }
                 
+                LOG("closing connection");
                 close(client);
             }
         }
@@ -161,28 +196,28 @@ static bool app_reader(struct aloof_server *self, uint32_t oid, enum aloof_acces
         aloof_data_put_u32(out, 0x10000);
         break;    
     case TEST_U64:
-        aloof_data_put_u64(out, 0x10000);
+        aloof_data_put_u64(out, 0x100000000);
         break;    
     case TEST_I8:
-        aloof_data_put_i8(out, 0x80);
+        aloof_data_put_i8(out, -42);
         break;
     case TEST_I16:
-        aloof_data_put_i16(out, 0x80);
+        aloof_data_put_i16(out, -42);
         break;
     case TEST_I32:
-        aloof_data_put_i32(out, 0x80);
+        aloof_data_put_i32(out, -42);
         break;
     case TEST_I64:
-        aloof_data_put_i64(out, 0x80);
+        aloof_data_put_i64(out, -42);
         break;
     case TEST_BOOL:
         aloof_data_put_bool(out, true);
         break;
     case TEST_FLOAT:
-        aloof_data_put_float(out, 42.1);
+        aloof_data_put_float(out, 42);
         break;
     case TEST_DOUBLE:
-        aloof_data_put_double(out, 42.1);
+        aloof_data_put_double(out, 42);
         break;
     case TEST_STRING:
     {
@@ -196,6 +231,38 @@ static bool app_reader(struct aloof_server *self, uint32_t oid, enum aloof_acces
         aloof_data_put_blob(out, value, sizeof(value)-1U);
     }
         break;
+    case TEST_NO_ACCESS:
+    {
+        *error = ALOOF_ACCESS_ERROR_ACCESS;
+        retval = false;
+    }
+        break;
+    case TEST_AUTH:
+    {
+        *error = ALOOF_ACCESS_ERROR_AUTHENTICATION;
+        retval = false;
+    }
+        break;
+    case TEST_ARG:
+    {
+        *error = ALOOF_ACCESS_ERROR_ARGUMENT;
+        retval = false;
+    }
+        break;
+    case TEST_TEMP:
+    {
+        *error = ALOOF_ACCESS_ERROR_TEMPORARY;
+        retval = false;
+    }
+        break;
+    case TEST_APP:
+    {
+        *error = ALOOF_ACCESS_ERROR_APPLICATION;
+        retval = false;
+    }
+        break;
+        
+    case TEST_UNKNOWN:
     default:  
         *error = ALOOF_ACCESS_ERROR_UNKNOWN;
         retval = false;
@@ -237,6 +304,37 @@ static bool app_writer(struct aloof_server *self, uint32_t oid, struct aloof_dat
         break;
     case TEST_BLOB:    
         break;
+    case TEST_NO_ACCESS:
+    {
+        *error = ALOOF_ACCESS_ERROR_ACCESS;
+        retval = false;
+    }
+        break;
+    case TEST_AUTH:
+    {
+        *error = ALOOF_ACCESS_ERROR_AUTHENTICATION;
+        retval = false;
+    }
+        break;
+    case TEST_ARG:
+    {
+        *error = ALOOF_ACCESS_ERROR_ARGUMENT;
+        retval = false;
+    }
+        break;
+    case TEST_TEMP:
+    {
+        *error = ALOOF_ACCESS_ERROR_TEMPORARY;
+        retval = false;
+    }
+        break;
+    case TEST_APP:
+    {
+        *error = ALOOF_ACCESS_ERROR_APPLICATION;
+        retval = false;
+    }
+        break;
+    case TEST_UNKNOWN:
     default:  
         *error = ALOOF_ACCESS_ERROR_UNKNOWN;
         retval = false;

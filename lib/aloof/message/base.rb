@@ -7,13 +7,15 @@ module Aloof::Message
     require_relative "error"
     require_relative "command"
     require_relative "response"
+    require_relative "alert"
     
     MESSAGES = [
       Hello,
       HelloHello,
       Error,
       Command,
-      Response    
+      Response,
+      Alert
     ]
     
     TYPES = [
@@ -41,7 +43,6 @@ module Aloof::Message
     def self.decode(buf)
     
       msg = MESSAGES[buf.get_uint]
-      
       msg.decode(buf) if msg
       
     end

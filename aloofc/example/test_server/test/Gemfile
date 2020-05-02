@@ -1,0 +1,8 @@
+source 'https://rubygems.org'
+
+#gem 'test_sequence', git: 'git@github.com:cjhdev/test_sequence.git'
+gem 'test_sequence', path: "../../../../../test_sequence"
+
+gem 'aloof', path: "../../../.."
+
+gem 'rake'

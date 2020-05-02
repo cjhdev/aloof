@@ -1,16 +1,28 @@
-require 'digest/crc16_ccitt'
 require 'logger'
 
 module Aloof
 
   class Client
   
-    attr_reader :defs, :timeout, :log
+    attr_reader :object_table, :timeout, :log
     
     def next_invoke_id
       value = @invoke_id
       @invoke_id += 1
       value
+    end
+  
+    def on_alert(&block)
+      @on_alert = block
+      self
+    end
+  
+    def self.open(**opts, &block)
+      client = self.new(**opts)
+      client.open
+      block.call(client)
+      client.close
+      self
     end
   
     def initialize(**opts)
@@ -19,62 +31,40 @@ module Aloof
     
       @invoke_id=0
     
-      @defs = opts[:registers]||{}
-      
       @timeout = opts[:timeout]||5
       
-      @defs = @defs.map do |k,v|
+      @object_table = opts[:object_table]||ObjectTable.new
+      
+      @transport_type = opts[:transport]||:tcp
         
-        raise unless v.kind_of? Hash
-        
-        value = v.dup
-        
-        case v[:id]
-        when String
-          value[:id] = v[:id].to_i(16)
-        when Integer
-          value[:id] = v[:id]
-        else
-          raise "id '#{v[:id]}' is invalid"
-        end
-        
-        [
-          k,
-          value
-        ]
-        
-      end.to_h
-        
-      @transport = Slip.new(**opts)
+      case @transport_type
+      when :slip, :slip_crc16
+        @transport = Slip.new(**opts)
+      when :tcp
+        @transport = Tcp.new(**opts)
+      else
+        raise "unknown transport #{@transport_type}"
+      end
       
       decoder = MessageDecoder.new
     
       @pending = {}
     
       @transport.on_rx do |frame|
+        
+        begin
+          msg = decoder.decode(frame)
+        rescue => e
+          puts e
+        end
       
-        crc = Digest::CRC16CCITT.new
-        crc << frame
-        
-        if crc.checksum == 0
-        
-          begin
-            msg = decoder.decode(frame.slice(0..-3))
-          rescue => e
-            puts e
-          end
-        
-          case msg
-          when Message::Response          
-            if job = @pending[msg.invoke_id]
-              job.push(msg)
-            end          
-          end
-        
-        else
-        
-          puts "discarding bad CRC"
-        
+        case msg
+        when Message::Response          
+          if job = @pending[msg.invoke_id]
+            job.push(msg)
+          end          
+        when Message::Alert
+          @on_alert.call(msg) if @on_alert
         end
         
       end
@@ -89,45 +79,34 @@ module Aloof
       @transport.close
     end
     
-    def read(oid, **opts)
+    def read(name, **opts)
     
-      definition = defs[oid.to_sym]
+      obj = object_table.lookup_name(name)
       
-      raise RangeError.new "#{oif} is an unknown object" unless definition
+      raise RangeError.new "#{name} is an unknown object" unless obj
     
       confirmed = opts[:confirmed]||true
     
-      cmd = Message::Command.new(confirmed, next_invoke_id, Message::ReadCommand.new(definition[:id]))
+      cmd = Message::Command.new(confirmed, next_invoke_id, 
+        Message::ReadCommand.new(obj.oid)
+      )
       
       resp = transport(cmd)
       
       case resp
       when Message::Response 
+        
         case resp.type
         when Message::ReadResponse
-          if resp.type.result == :success
+        
+          raise access_error_to_exception(resp.type.reason) if resp.type.result == :failure
           
-            value = resp.type.value
-          
-            if opts[:from_terminal]
-            
-              case definition[:type]
-              when "blob"
-                value = value.bytes.map{|b|"%02X"%b}.join                
-              else
-                value = value.to_s
-              end
-            
-            end
-          
-            return resp.type.result, resp.type.type, value
-            
-          else
-            return resp.type.result, resp.type.reason
-          end
+          return resp.type.value
+                    
         else
           raise "unexpected response type"
         end
+        
       when Message::Error
         raise "device reports error"
       else
@@ -136,38 +115,17 @@ module Aloof
     
     end
     
-    def write(oid, value, **opts)        
+    def write(name, value=nil, **opts)        
       
-      definition = defs[oid]
+      obj = object_table.lookup_name(name)
       
-      raise RangeError.new "#{oid} is an unknown object" unless definition
+      raise RangeError.new "#{name} is an unknown object" unless obj
       
       confirmed = opts[:confirmed]||true
       
-      # convert value from terminal
-      if opts[:from_terminal]
-      
-        case definition[:type]
-        when "bool"
-          case value.downcase
-          when "true"
-            value = true
-          when "false"  
-            value = false
-          else
-            raise "invalid input"
-          end
-        when "u8","u16","u32","u64",
-          value = value.to_i
-        when "float", "double"
-          value = value.to_f
-        when "blob"
-          input = input.pack("H*")
-        end
-        
-      end
-      
-      cmd = Message::Command.new(confirmed, next_invoke_id, Message::WriteCommand.new(definition[:id], definition[:type].to_sym, value))
+      cmd = Message::Command.new(confirmed, next_invoke_id, 
+        Message::WriteCommand.new(obj.oid, obj.type, value)
+      )
       
       resp = transport(cmd)
       
@@ -183,10 +141,6 @@ module Aloof
     def transport(msg)
     
       frame = msg.encode
-      
-      crc = Digest::CRC16CCITT.new
-      crc << frame
-      frame << [crc.checksum].pack("S>")
       
       @transport.tx(frame)
     
@@ -208,6 +162,19 @@ module Aloof
     
       end
         
+    end
+    
+    ACCESS_ERROR_TO_EXCEPTION = {
+      unkown_oid: UnknownOID,
+      access_denied: AccessDenied,
+      authentication_required: AuthenticationRequired,
+      argument_error: ArgumentError,
+      temporary_failure: TemporaryFailure,
+      application_error: ApplicationError
+    }
+    
+    def access_error_to_exception(error)
+      ACCESS_ERROR_TO_EXCEPTION[error]
     end
     
   end

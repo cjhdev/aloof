@@ -1,4 +1,5 @@
 require 'serialport'
+require 'digest/crc16_ccitt'
 
 module Aloof
 
@@ -25,6 +26,7 @@ module Aloof
       @rx_handler = nil
       @reader = nil    
       @opts = opts
+      @transport = opts[:transport]||:slip
     end
   
     def open?
@@ -33,7 +35,14 @@ module Aloof
     
     def tx(buffer)
     
-      #puts "tx: #{buffer.bytes.map{|b|"%02X" % b}.join}"
+      case @transport
+      when :slip_crc16
+        crc = Digest::CRC16CCITT.new
+        crc << buffer
+        buffer << [crc.checksum].pack("S>")
+      end
+      
+      puts "tx: #{buffer.bytes.map{|b|"%02X" % b}.join}"
     
       @port.write [END_CHAR].pack("C")
       buffer.bytes.each do |c|
@@ -75,9 +84,30 @@ module Aloof
                 state = :escape              
               when END_CHAR        
               
-                #puts "rx: #{buffer.map{|b|"%02X" % b}.join}"
-                                                                    
-                @rx_handler.call(buffer.pack("C*")) if @rx_handler and buffer.size > 0
+                puts "rx: #{buffer.map{|b|"%02X" % b}.join}"
+                
+                packed = buffer.pack("C*")
+                
+                case @transport
+                when :slip_crc16
+                  
+                  crc = Digest::CRC16CCITT.new
+                  crc << packed
+                  
+                  if crc.checksum == 0
+                  
+                    packed.slice!(-3..-1)
+                  
+                    @rx_handler.call(packed) if @rx_handler and buffer.size > 0
+                    
+                  end
+                  
+                else
+                
+                  @rx_handler.call(packed) if @rx_handler and buffer.size > 0
+                  
+                end
+                
                 state = :rx
                 buffer = []
               else
