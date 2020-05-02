@@ -4,16 +4,17 @@ require 'optparse'
 require 'serialport'
 require 'json'
 require 'aloof'
+require 'ostruct'
 
-options = {
-  dev: '/dev/ttyUSB0',
-  baud: 38400,
-  debug: false,
-  port: 4567,
-  registers: {},
-  transport: :slip,
-  timeout: 1
-}
+options = OpenStruct.new
+
+options.dev = '/dev/ttyUSB0'
+options.baud = 38400
+options.debug =  false
+options.port = 4567
+options.object_table = Aloof::ObjectTable.new
+options.transport = :slip_crc16
+options.timeout = 1
 
 OptionParser.new do |opts|
   
@@ -33,32 +34,32 @@ OptionParser.new do |opts|
   opts.separator ""
   
   opts.on("-r", "--registers REGISTERS", "register definition file") do |value|
-    options[:registers] = JSON.parse(File.read(value), symbolize_names: true)
+    options.object_table = Aloof::ObjectTable.from_json(File.read(value))
   end
   
   opts.on("-t", "--transport TRANSPORT", "specify transport") do |value|  
-    options[:transport] = value.to_sym 
+    options.transport = value.to_sym 
   end
   
   opts.on("-d", "--dev DEVICE", "specify serial device") do |value|
-    options[:dev] = value
+    options.dev = value
   end
   
   opts.on("-b", "--baud BAUD", "specify serial baud rate") do |value|
-    options[:baud] = value.to_i
+    options.baud = value.to_i
   end
   
   opts.on("--host HOST", "specify IP host") do |value|
     
-    options[:host] = value
+    options.host = value
   end
   
   opts.on("--port PORT", "specify IP port") do |value|
-    options[:port] = value.to_i
+    options.port = value.to_i
   end
   
   opts.on("--debug", "enable debug") do
-    options[:debug] = true
+    options.debug = true
   end
   
   opts.on("--retry RETRY", "set number of retries") do |value|
@@ -68,7 +69,7 @@ OptionParser.new do |opts|
       abort
     end
     
-    options[:retries] = value.to_i    
+    options.retries = value.to_i    
     
   end
   
@@ -79,7 +80,7 @@ OptionParser.new do |opts|
       abort
     end
     
-    options[:timeout] = value.to_i
+    options.timeout = value.to_i
     
   end
   
@@ -95,21 +96,53 @@ if ARGV.size == 0
   abort
 end
 
-client = Aloof::Client.new(**options)
+Aloof::Client.session(**options.to_h) do |client|
 
-client.open
+  case ARGV[0]
+  when 'read'
+    
+    if obj = options.object_table.lookup_name(ARGV[1])  
+      
+      begin
+        puts Aloof::TerminalType.new(obj.type).to_terminal(
+          client.read(obj.name)
+        )
+      rescue Aloof::TimeoutError
+        STDERR.puts "timeout"
+      rescue => e
+        STDERR.puts e
+      end    
+    else    
+      STDERR.puts "unknown object"    
+    end    
+    
+  when 'write'
 
-case ARGV[0]
-when 'read'
+    if obj = options.object_table.lookup_name(ARGV[1])  
+      begin
+        client.write(obj.name, 
+          Aloof::TerminalType.new(obj.type).from_terminal(ARGV[2])
+        )
+      rescue => e
+        STDERR.puts e
+      end  
+    else
+      STDERR.puts "unknown object"    
+    end
+    
+  when 'listen'
 
-  puts client.read(ARGV[1], from_terminal: true).join(" ")
+    client.on_alert do |msg|
+      puts "[#{Time.now}] #{msg.aid} #{msg.type}"
+    end
+    
+    begin
+      sleep
+    rescue Interrupt
+    end
+    
+  end
 
-when 'write'
-
-  puts client.write(ARGV[1], ARGV[2], from_terminal: true).join(" ")
-  
 end
-
-client.close
 
 exit

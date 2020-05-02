@@ -13,6 +13,7 @@ module Aloof
         Message::Base.decode(buf)
       rescue => e        
         puts e
+        puts e.backtrace
         nil
       end
       

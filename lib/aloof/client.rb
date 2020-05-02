@@ -17,7 +17,7 @@ module Aloof
       self
     end
   
-    def self.open(**opts, &block)
+    def self.session(**opts, &block)
       client = self.new(**opts)
       client.open
       block.call(client)
@@ -51,11 +51,13 @@ module Aloof
       @pending = {}
     
       @transport.on_rx do |frame|
+    
+        #puts frame.bytes.map{|b|"%02X"%b}.join
         
         begin
           msg = decoder.decode(frame)
         rescue => e
-          puts e
+          puts e          
         end
       
         case msg
@@ -95,7 +97,7 @@ module Aloof
       
       case resp
       when Message::Response 
-        
+      
         case resp.type
         when Message::ReadResponse
         

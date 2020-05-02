@@ -27,6 +27,7 @@ module Aloof
       @reader = nil    
       @opts = opts
       @transport = opts[:transport]||:slip
+      @debug = false
     end
   
     def open?
@@ -42,7 +43,7 @@ module Aloof
         buffer << [crc.checksum].pack("S>")
       end
       
-      puts "tx: #{buffer.bytes.map{|b|"%02X" % b}.join}"
+      puts "tx: #{buffer.bytes.map{|b|"%02X" % b}.join}" if @debug
     
       @port.write [END_CHAR].pack("C")
       buffer.bytes.each do |c|
@@ -84,7 +85,7 @@ module Aloof
                 state = :escape              
               when END_CHAR        
               
-                puts "rx: #{buffer.map{|b|"%02X" % b}.join}"
+                puts "rx: #{buffer.map{|b|"%02X" % b}.join}"  if @debug
                 
                 packed = buffer.pack("C*")
                 
@@ -96,9 +97,11 @@ module Aloof
                   
                   if crc.checksum == 0
                   
-                    packed.slice!(-3..-1)
-                  
-                    @rx_handler.call(packed) if @rx_handler and buffer.size > 0
+                    if packed.size > 2
+                    
+                      @rx_handler.call(packed.slice(0..-3)) if @rx_handler and buffer.size > 0
+                      
+                    end
                     
                   end
                   

@@ -11,18 +11,23 @@ module Aloof
       
       raise unless raw.kind_of? Hash
       
-      raw.map do |k,v|
+      raw = raw.map do |k,v|
         
         raise unless v.kind_of? Hash
         
         value = OpenStruct.new
         
-        if v[:oid].kind_of? String
-          value.oid = v[:oid].to_i(16)
-        else
-          value.oid = v[:oid].to_i
-        end
+        value.name = k.to_sym
         
+        case v[:oid]
+        when String
+          value.oid = v[:oid].to_i(16)
+        when Integer
+          value.oid = v[:oid].to_i
+        else
+          raise
+        end
+          
         value.type = v[:type].downcase.to_sym
         
         raise unless Message::Base::TYPES.include? value.type
@@ -43,12 +48,16 @@ module Aloof
     end
     
     def add(name, **opts)
-      @defs[name.to_sym] = OpenStruct.new(**opts)
+      
+      name = name.to_sym
+      oid = opts[:oid]||(@defs.map{|k,v|v.oid}.sort.last + 1)
+      
+      @defs[name] = OpenStruct.new(oid: oid, name: name, type: opts[:type])
       self
     end
     
     def lookup_name(name)
-      @defs[name.to_sym]
+      @defs[name.to_sym] if name
     end
     
     def to_json

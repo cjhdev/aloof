@@ -9,6 +9,7 @@ module Aloof
     end
     
     def to_terminal(value)
+      
       case type
       when :blob
         return value.bytes.map{|b|"%02X"%b}.join    
