@@ -81,24 +81,9 @@ bool aloof_slip_decode(struct aloof_slip *self, uint8_t c, const void **out, uin
     return retval;
 }
 
-bool aloof_slip_encode(struct aloof_slip *self, const void *in, uint32_t size)
+bool aloof_slip_put_start(struct aloof_slip *self)
 {
-    uint32_t i;
-    const uint8_t *ptr = (uint8_t *)in;
-    
-    for(i=0U;i<size;i++){
-        
-        aloof_slip_put(self, ptr[i]);
-    }
-    
-    return true;
-}
-
-bool aloof_slip_encode_end(struct aloof_slip *self)
-{
-    while(!self->put_fn(self->state, ALOOF_SLIP_END_CHAR));
-    
-    return true;
+    return self->put_fn(self->state, ALOOF_SLIP_END_CHAR);
 }
 
 bool aloof_slip_put(struct aloof_slip *self, uint8_t c)
@@ -118,4 +103,9 @@ bool aloof_slip_put(struct aloof_slip *self, uint8_t c)
     }
     
     return true;
+}
+
+bool aloof_slip_put_end(struct aloof_slip *self)
+{
+    return aloof_slip_put_start(self);    
 }

@@ -34,8 +34,8 @@ struct aloof_slip_init_arg {
 
 struct aloof_slip *aloof_slip_init(struct aloof_slip *self, const struct aloof_slip_init_arg *arg);
 bool aloof_slip_decode(struct aloof_slip *self, uint8_t c, const void **out, uint32_t *size);
-bool aloof_slip_encode(struct aloof_slip *self, const void *in, uint32_t size);
-bool aloof_slip_encode_end(struct aloof_slip *self);
+bool aloof_slip_put_start(struct aloof_slip *self);
 bool aloof_slip_put(struct aloof_slip *self, uint8_t c);
+bool aloof_slip_put_end(struct aloof_slip *self);
 
 #endif
