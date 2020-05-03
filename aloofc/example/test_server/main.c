@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <stdlib.h>
 
-enum test_objects {
+enum test_object_id {
     
     TEST_NIL,
     
@@ -44,6 +44,12 @@ enum test_objects {
     
 };
 
+struct object_def {
+    
+    enum test_object_id oid;
+    enum aloof_data_type type;
+};
+
 static struct aloof_server server;
 
 static bool app_reader(struct aloof_server *self, uint32_t oid, enum aloof_access_error *error, struct aloof_stream *out);
@@ -56,8 +62,8 @@ int main(int argc, char **argv)
     int listener, client, n;
     struct sockaddr_in serv_addr, cli_addr;
     
-    uint8_t rx_buffer[100U];
-    uint8_t tx_buffer[100U];
+    static uint8_t rx_buffer[1024U];
+    static uint8_t tx_buffer[1024U];
     struct aloof_stream rx, tx;
     
     uint16_t header;
@@ -178,95 +184,160 @@ int main(int argc, char **argv)
     exit(EXIT_SUCCESS);
 }
 
+struct state_holder {
+    
+    uint8_t u8;
+    uint16_t u16;
+    uint32_t u32;
+    uint64_t u64;
+    int8_t i8;
+    int16_t i16;
+    int32_t i32;
+    int64_t i64;
+    bool bl;
+    float fl;
+    double db;
+    struct {
+        char value[512];
+        uint32_t size;
+    } string;
+    struct {
+        uint8_t value[512];
+        uint32_t size;
+    } blob;
+};
+
+static struct state_holder state;
+
+static const struct object_def *lookup_oid(uint32_t oid)
+{
+    const struct object_def *retval = NULL;
+    size_t i;
+    
+    static const struct object_def objects[] = {
+        {TEST_NIL, ALOOF_DATA_TYPE_NIL},
+        
+        {TEST_U8, ALOOF_DATA_TYPE_U8},
+        {TEST_U16, ALOOF_DATA_TYPE_U16},
+        {TEST_U32, ALOOF_DATA_TYPE_U32},
+        {TEST_U64, ALOOF_DATA_TYPE_U64},
+        
+        {TEST_I8, ALOOF_DATA_TYPE_I8},
+        {TEST_I16, ALOOF_DATA_TYPE_I16},
+        {TEST_I32, ALOOF_DATA_TYPE_I32},
+        {TEST_I64, ALOOF_DATA_TYPE_I64},
+        
+        {TEST_BOOL, ALOOF_DATA_TYPE_BOOL},
+        
+        {TEST_FLOAT, ALOOF_DATA_TYPE_FLOAT},
+        {TEST_DOUBLE, ALOOF_DATA_TYPE_DOUBLE},
+        
+        {TEST_STRING, ALOOF_DATA_TYPE_STRING},
+        {TEST_BLOB, ALOOF_DATA_TYPE_BLOB},
+        
+        {TEST_UNKNOWN, ALOOF_DATA_TYPE_NIL},
+        {TEST_NO_ACCESS, ALOOF_DATA_TYPE_NIL},
+        {TEST_AUTH, ALOOF_DATA_TYPE_NIL},
+        {TEST_ARG, ALOOF_DATA_TYPE_NIL},
+        {TEST_TEMP, ALOOF_DATA_TYPE_NIL},
+        {TEST_APP, ALOOF_DATA_TYPE_NIL}
+    };
+    
+    for(i=0U;i<sizeof(objects)/sizeof(*objects);i++){
+        
+        if(objects[i].oid == oid){
+            
+            retval = &objects[i];
+            break;
+        }
+    }
+    
+    return retval;
+}
+
 static bool app_reader(struct aloof_server *self, uint32_t oid, enum aloof_access_error *error, struct aloof_stream *out)
 {    
     bool retval = true;
     
-    switch(oid){
-    case TEST_NIL:
-        aloof_data_put_nil(out);
-        break;    
-    case TEST_U8:
-        aloof_data_put_u8(out, 0x80);
-        break;    
-    case TEST_U16:
-        aloof_data_put_u16(out, 0x100);
-        break;    
-    case TEST_U32:
-        aloof_data_put_u32(out, 0x10000);
-        break;    
-    case TEST_U64:
-        aloof_data_put_u64(out, 0x100000000);
-        break;    
-    case TEST_I8:
-        aloof_data_put_i8(out, -42);
-        break;
-    case TEST_I16:
-        aloof_data_put_i16(out, -42);
-        break;
-    case TEST_I32:
-        aloof_data_put_i32(out, -42);
-        break;
-    case TEST_I64:
-        aloof_data_put_i64(out, -42);
-        break;
-    case TEST_BOOL:
-        aloof_data_put_bool(out, true);
-        break;
-    case TEST_FLOAT:
-        aloof_data_put_float(out, 42);
-        break;
-    case TEST_DOUBLE:
-        aloof_data_put_double(out, 42);
-        break;
-    case TEST_STRING:
-    {
-        const char value[] = "hello";
-        aloof_data_put_string(out, value, sizeof(value)-1U);
-    }
-        break;
-    case TEST_BLOB:
-    {
-        const char value[] = "hello";
-        aloof_data_put_blob(out, value, sizeof(value)-1U);
-    }
-        break;
-    case TEST_NO_ACCESS:
-    {
-        *error = ALOOF_ACCESS_ERROR_ACCESS;
-        retval = false;
-    }
-        break;
-    case TEST_AUTH:
-    {
-        *error = ALOOF_ACCESS_ERROR_AUTHENTICATION;
-        retval = false;
-    }
-        break;
-    case TEST_ARG:
-    {
-        *error = ALOOF_ACCESS_ERROR_ARGUMENT;
-        retval = false;
-    }
-        break;
-    case TEST_TEMP:
-    {
-        *error = ALOOF_ACCESS_ERROR_TEMPORARY;
-        retval = false;
-    }
-        break;
-    case TEST_APP:
-    {
-        *error = ALOOF_ACCESS_ERROR_APPLICATION;
-        retval = false;
-    }
-        break;
+    const struct object_def *obj = lookup_oid(oid);
+    
+    if(obj == NULL){
         
-    case TEST_UNKNOWN:
-    default:  
-        *error = ALOOF_ACCESS_ERROR_UNKNOWN;
         retval = false;
-    }   
+        *error = ALOOF_ACCESS_ERROR_UNKNOWN;
+    }
+    else{
+        
+        switch(oid){
+        case TEST_NIL:
+            aloof_data_put_nil(out);
+            break;    
+        case TEST_U8:
+            aloof_data_put_u8(out, state.u8);
+            break;    
+        case TEST_U16:
+            aloof_data_put_u16(out, state.u16);
+            break;    
+        case TEST_U32:
+            aloof_data_put_u32(out, state.u32);
+            break;    
+        case TEST_U64:
+            aloof_data_put_u64(out, state.u64);
+            break;    
+        case TEST_I8:
+            aloof_data_put_i8(out, state.i8);
+            break;
+        case TEST_I16:
+            aloof_data_put_i16(out, state.i16);
+            break;
+        case TEST_I32:
+            aloof_data_put_i32(out, state.i32);
+            break;
+        case TEST_I64:
+            aloof_data_put_i64(out, state.i64);
+            break;
+        case TEST_BOOL:
+            aloof_data_put_bool(out, state.bl);
+            break;
+        case TEST_FLOAT:
+            aloof_data_put_float(out, state.fl);
+            break;
+        case TEST_DOUBLE:
+            aloof_data_put_double(out, state.db);
+            break;
+        case TEST_STRING:
+            aloof_data_put_string(out, state.string.value, state.string.size);
+            break;
+        case TEST_BLOB:
+            aloof_data_put_string(out, state.blob.value, state.blob.size);
+            break;
+        case TEST_NO_ACCESS:
+            *error = ALOOF_ACCESS_ERROR_ACCESS;
+            retval = false;
+            break;
+        case TEST_AUTH:
+            *error = ALOOF_ACCESS_ERROR_AUTHENTICATION;
+            retval = false;
+            break;
+        case TEST_ARG:
+            *error = ALOOF_ACCESS_ERROR_ARGUMENT;
+            retval = false;
+            break;
+        case TEST_TEMP:
+            *error = ALOOF_ACCESS_ERROR_TEMPORARY;
+            retval = false;
+            break;
+        case TEST_APP:
+            *error = ALOOF_ACCESS_ERROR_APPLICATION;
+            retval = false;
+            break;
+            
+        case TEST_UNKNOWN:
+        default:  
+            *error = ALOOF_ACCESS_ERROR_UNKNOWN;
+            retval = false;
+        }   
+    }
     
     return retval; 
 }
@@ -275,70 +346,133 @@ static bool app_writer(struct aloof_server *self, uint32_t oid, struct aloof_dat
 {
     bool retval = true;
     
-    switch(oid){
-    case TEST_NIL:
-        break;    
-    case TEST_U8:
-        break;    
-    case TEST_U16:
-        break;    
-    case TEST_U32:
-        break;    
-    case TEST_U64:
-        break;    
-    case TEST_I8:
-        break;
-    case TEST_I16:
-        break;
-    case TEST_I32:
-        break;
-    case TEST_I64:
-        break;
-    case TEST_BOOL:
-        break;
-    case TEST_FLOAT:
-        break;
-    case TEST_DOUBLE:
-        break;
-    case TEST_STRING:    
-        break;
-    case TEST_BLOB:    
-        break;
-    case TEST_NO_ACCESS:
-    {
-        *error = ALOOF_ACCESS_ERROR_ACCESS;
+    const struct object_def *obj = lookup_oid(oid);
+    
+    if(obj == NULL){
+        
         retval = false;
-    }
-        break;
-    case TEST_AUTH:
-    {
-        *error = ALOOF_ACCESS_ERROR_AUTHENTICATION;
-        retval = false;
-    }
-        break;
-    case TEST_ARG:
-    {
-        *error = ALOOF_ACCESS_ERROR_ARGUMENT;
-        retval = false;
-    }
-        break;
-    case TEST_TEMP:
-    {
-        *error = ALOOF_ACCESS_ERROR_TEMPORARY;
-        retval = false;
-    }
-        break;
-    case TEST_APP:
-    {
-        *error = ALOOF_ACCESS_ERROR_APPLICATION;
-        retval = false;
-    }
-        break;
-    case TEST_UNKNOWN:
-    default:  
         *error = ALOOF_ACCESS_ERROR_UNKNOWN;
-        retval = false;
-    }   
+    }
+    else{
+    
+        if(obj->type != data->type){
+            
+            retval = false;
+            *error = ALOOF_ACCESS_ERROR_ARGUMENT;
+        }
+        else{
+    
+            switch(oid){
+            case TEST_NIL:
+                break;    
+            case TEST_U8:
+                state.u8 = data->value.u8;
+                break;    
+            case TEST_U16:
+                state.u16 = data->value.u16;
+                break;    
+            case TEST_U32:
+                state.u32 = data->value.u32;
+                break;     
+            case TEST_U64:
+                state.u64 = data->value.u64;
+                break;    
+            case TEST_I8:
+                state.i8 = data->value.i8;
+                break;    
+            case TEST_I16:
+                state.i16 = data->value.i16;
+                break;    
+            case TEST_I32:
+                state.i32 = data->value.i32;
+                break;    
+            case TEST_I64:
+                state.i64 = data->value.i64;
+                break;    
+            case TEST_BOOL:
+                state.bl = data->value.bl;
+                break;    
+            case TEST_FLOAT:
+                state.fl = data->value.fl; 
+                break;
+            case TEST_DOUBLE:
+                state.db = data->value.db; 
+                break;
+            case TEST_STRING:    
+                if(aloof_data_get_string_size(data) <= sizeof(state.string.value)){
+                    
+                    if(aloof_data_get_string(data, state.string.value, sizeof(state.string.value)) == aloof_data_get_string_size(data)){
+                        
+                        state.string.size = aloof_data_get_string_size(data);
+                    }            
+                    else{
+                        
+                        *error = ALOOF_ACCESS_ERROR_APPLICATION;
+                        retval = false;
+                    }
+                }
+                else{
+                
+                    *error = ALOOF_ACCESS_ERROR_APPLICATION;
+                    retval = false;
+                }        
+                break;
+            case TEST_BLOB:    
+                if(aloof_data_get_string_size(data) <= sizeof(state.blob.value)){
+                    
+                    if(aloof_data_get_string(data, state.blob.value, sizeof(state.blob.value)) == aloof_data_get_string_size(data)){
+                    
+                        state.blob.size = aloof_data_get_string_size(data);
+                    }            
+                    else{
+                        
+                        *error = ALOOF_ACCESS_ERROR_APPLICATION;
+                        retval = false;
+                    }
+                }
+                else{
+                
+                    *error = ALOOF_ACCESS_ERROR_APPLICATION;
+                    retval = false;
+                }            
+                break;
+            case TEST_NO_ACCESS:
+            {
+                *error = ALOOF_ACCESS_ERROR_ACCESS;
+                retval = false;
+            }
+                break;
+            case TEST_AUTH:
+            {
+                *error = ALOOF_ACCESS_ERROR_AUTHENTICATION;
+                retval = false;
+            }
+                break;
+            case TEST_ARG:
+            {
+                *error = ALOOF_ACCESS_ERROR_ARGUMENT;
+                retval = false;
+            }
+                break;
+            case TEST_TEMP:
+            {
+                *error = ALOOF_ACCESS_ERROR_TEMPORARY;
+                retval = false;
+            }
+                break;
+            case TEST_APP:
+            {
+                *error = ALOOF_ACCESS_ERROR_APPLICATION;
+                retval = false;
+            }
+                break;
+            case TEST_UNKNOWN:
+            default:  
+                *error = ALOOF_ACCESS_ERROR_UNKNOWN;
+                retval = false;
+            }   
+        }
+    }
     
     return retval; 
 }

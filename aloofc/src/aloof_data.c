@@ -157,6 +157,22 @@ bool aloof_data_get(struct aloof_stream *in, struct aloof_data_rx *data)
     return retval;
 }
 
+uint32_t aloof_data_get_string_size(const struct aloof_data_rx *self)
+{
+    uint32_t retval = 0U;
+    
+    switch(self->type){
+    case ALOOF_DATA_TYPE_STRING:
+    case ALOOF_DATA_TYPE_BLOB:
+        retval = self->value.string.size;
+        break;
+    default:
+        break;
+    }    
+    
+    return retval;
+}
+
 uint32_t aloof_data_get_string(struct aloof_data_rx *self, void *value, uint32_t max)
 {
     uint32_t retval = 0U;

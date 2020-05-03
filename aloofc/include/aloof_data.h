@@ -81,5 +81,6 @@ bool aloof_data_put_blob(struct aloof_stream *out, const void *value, uint32_t s
 
 bool aloof_data_get(struct aloof_stream *in, struct aloof_data_rx *data);
 uint32_t aloof_data_get_string(struct aloof_data_rx *self, void *value, uint32_t max);
+uint32_t aloof_data_get_string_size(const struct aloof_data_rx *self);
 
 #endif
