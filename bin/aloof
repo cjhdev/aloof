@@ -18,7 +18,7 @@ options.timeout = 1
 
 OptionParser.new do |opts|
   
-  opts.banner = "pulse_config <command> [options]"
+  opts.banner = "aloof [options] <command>"
   
   opts.separator ""
   opts.separator "commands:"
@@ -26,6 +26,7 @@ OptionParser.new do |opts|
   
   opts.separator "read <name>"
   opts.separator "write <name> [value]"
+  opts.separator "listen"
   
   opts.separator ""
   

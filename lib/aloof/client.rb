@@ -61,10 +61,15 @@ module Aloof
         end
       
         case msg
-        when Message::Response          
+        when Message::Hello          
+          @transport.tx(
+            Message::HelloHello.new(0,0,:client).encode
+          )          
+        when Message::Response                  
           if job = @pending[msg.invoke_id]
             job.push(msg)
           end          
+        
         when Message::Alert
           @on_alert.call(msg) if @on_alert
         end
@@ -79,6 +84,26 @@ module Aloof
     
     def close
       @transport.close
+    end
+    
+    def hello
+      
+      cmd = Message::Hello.new(0, 0, :client)
+      
+      resp = transport(cmd)
+      
+      case resp
+      when Message::HelloHello 
+      when Message::Response 
+      when Message::Error
+        raise "device reports error"
+      when nil
+        raise TimeoutError   
+      else
+        raise "unexpected response"
+      end
+      
+      
     end
     
     def read(name, **opts)
@@ -111,8 +136,10 @@ module Aloof
         
       when Message::Error
         raise "device reports error"
+      when nil
+        raise TimeoutError   
       else
-        raise TimeoutError          
+        raise "unexpected response"
       end
     
     end
@@ -131,11 +158,13 @@ module Aloof
       
       resp = transport(cmd)
       
-      case rsp
+      case resp
       when Message::Response      
       when Message::Error
+      when nil
+        raise TimeoutError 
       else
-        raise
+        raise "unexpected response"
       end
       
     end

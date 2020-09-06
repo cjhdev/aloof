@@ -28,6 +28,7 @@ module Aloof
       @opts = opts
       @transport = opts[:transport]||:slip
       @debug = false
+      @mutex = Mutex.new
     end
   
     def open?
@@ -36,27 +37,32 @@ module Aloof
     
     def tx(buffer)
     
-      case @transport
-      when :slip_crc16
-        crc = Digest::CRC16CCITT.new
-        crc << buffer
-        buffer << [crc.checksum].pack("S>")
-      end
-      
-      puts "tx: #{buffer.bytes.map{|b|"%02X" % b}.join}" if @debug
+      with_mutex do
     
-      @port.write [END_CHAR].pack("C")
-      buffer.bytes.each do |c|
-        case c
-        when END_CHAR
-          @port.write [ESCAPE_CHAR,ESCAPE_END_CHAR].pack("CC")
-        when ESCAPE_CHAR
-          @port.write [ESCAPE_CHAR,ESCAPE_ESCAPE_CHAR].pack("CC")
-        else
-          @port.write [c].pack("C")
-        end          
+        case @transport
+        when :slip_crc16
+          crc = Digest::CRC16CCITT.new
+          crc << buffer
+          buffer << [crc.checksum].pack("S>")
+        end
+        
+        puts "tx: #{buffer.bytes.map{|b|"%02X" % b}.join}" if @debug
+      
+        @port.write [END_CHAR].pack("C")
+        buffer.bytes.each do |c|
+          case c
+          when END_CHAR
+            @port.write [ESCAPE_CHAR,ESCAPE_END_CHAR].pack("CC")
+          when ESCAPE_CHAR
+            @port.write [ESCAPE_CHAR,ESCAPE_ESCAPE_CHAR].pack("CC")
+          else
+            @port.write [c].pack("C")
+          end          
+        end
+        @port.write [END_CHAR].pack("C")
+        
       end
-      @port.write [END_CHAR].pack("C")
+        
     end
     
     def on_rx(&handler)
@@ -145,6 +151,12 @@ module Aloof
         @port.close
       end
       self    
+    end
+  
+    def with_mutux
+      @mutex.synchronize do
+        yield
+      end
     end
   
   end
