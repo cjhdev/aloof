@@ -137,23 +137,22 @@ module Aloof
                 state = :rx      
               end        
             end                
-          end            
-        rescue IOError, Interrupt
+          end
+        rescue IOError                    
         end          
       end
     end
     
     def close
       if self.open?
-        @reader.raise Interrupt
-        @reader.join
-        @running = false        
         @port.close
+        @reader.join
+        @running = false                
       end
       self    
     end
   
-    def with_mutux
+    def with_mutex
       @mutex.synchronize do
         yield
       end

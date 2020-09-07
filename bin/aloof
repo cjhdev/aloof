@@ -134,7 +134,7 @@ Aloof::Client.session(**options.to_h) do |client|
   when 'listen'
 
     client.on_alert do |msg|
-      puts "[#{Time.now}] #{msg.aid} #{msg.type}"
+      puts "[#{Time.now}] #{msg.aid} #{msg.type} #{Aloof::TerminalType.new(msg.type).to_terminal(msg.value)}"
     end
     
     begin

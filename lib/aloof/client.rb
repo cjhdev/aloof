@@ -21,7 +21,8 @@ module Aloof
       client = self.new(**opts)
       client.open
       block.call(client)
-      client.close
+      sleep(0.1)
+      client.close      
       self
     end
   

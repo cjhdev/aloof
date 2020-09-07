@@ -24,7 +24,7 @@ BEGIN
             server (1)
         },
         
-        version INTEGER,        
+        version Uint,        
         
         features BIT STRING SIZE(32)
     }
@@ -71,13 +71,13 @@ BEGIN
 
     Alert ::= SEQUENCE
     {
-        alert-id    U32,
-        data        Data
+        alert-id    Uint,
+        data        SEQUENCE SIZE(0..max-u32) OF Data
     }
 
     Write-Object-Command ::= SEQUENCE
     {
-        oid     INTEGER,
+        oid     Uint,
         data    Data
     }
 
@@ -89,7 +89,7 @@ BEGIN
 
     Read-Object-Command ::= SEQUENCE
     {
-        oid      INTEGER,
+        oid     Uint,
         data    Data
     }
 
@@ -101,8 +101,8 @@ BEGIN
 
     Write-File-Command ::= SEQUENCE
     {
-        fid     INTEGER,
-        offset  INTEGER,
+        oid     Uint,
+        offset  Uint,
         data    OCTET STRING (SIZE(0..max-u32))
     }
 
@@ -110,16 +110,16 @@ BEGIN
     {
         success [0] SEQUENCE 
         {
-            bytes-written INTEGER        
+            bytes-written Uint        
         },
-        failure [1] File-Access-Error        
+        failure [1] Access-Error        
     }
     
     Read-File-Command ::= SEQUENCE
     {
-        fid     INTEGER,
-        offset  INTEGER,
-        bytes   INTEGER        
+        oid     Uint,
+        offset  Uint,
+        bytes   Uint        
     }
 
     Read-File-Response ::= CHOICE
@@ -128,10 +128,8 @@ BEGIN
         {
             data OCTET STRING (SIZE(0..max-u32))
         },
-        failure [1] File-Access-Error        
+        failure [1] Access-Error        
     }
-
-
 
     Data ::= CHOICE
     {
@@ -167,14 +165,7 @@ BEGIN
         application
     }
     
-    File-Access-Error ::= ENUMERATED
-    {
-        unknown,
-        access,
-        authentication,
-        temporary,
-        application
-    }    
+    Uint ::= INTEGER (0..MAX)
 
     U8 ::= INTEGER (0..255)
     U16 ::= INTEGER (0..65535)
